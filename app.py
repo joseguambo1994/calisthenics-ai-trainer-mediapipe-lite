@@ -11,10 +11,6 @@ class ProcessVideoRequest(BaseModel):
 
 
 class ProcessVideoResponse(BaseModel):
-    output_video_path: str
-    frames: int
-    fps: float
-    r2_object_key: str
     r2_url: str
     video_signed_url: str
 
@@ -37,10 +33,6 @@ def process_video(payload: ProcessVideoRequest) -> ProcessVideoResponse:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {exc}") from exc
 
     return ProcessVideoResponse(
-        output_video_path=result.output_path,
-        frames=result.frames,
-        fps=result.fps,
-        r2_object_key=result.object_key,
         r2_url=result.object_url,
         video_signed_url=result.video_signed_url,
     )
