@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Protocol
 
-from domain.models import ProcessedVideo
+from domain.models import ProcessedVideo, StoredObject
 
 
 class TelegramVideoGateway(Protocol):
@@ -11,4 +11,14 @@ class TelegramVideoGateway(Protocol):
 
 class PoseVideoProcessor(Protocol):
     def process(self, input_video: Path, output_video: Path) -> ProcessedVideo:
+        ...
+
+
+class ObjectStorageGateway(Protocol):
+    def upload_file(
+        self,
+        source_path: Path,
+        object_key: str,
+        content_type: str | None = None,
+    ) -> StoredObject:
         ...

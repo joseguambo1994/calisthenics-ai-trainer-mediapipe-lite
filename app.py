@@ -14,6 +14,9 @@ class ProcessVideoResponse(BaseModel):
     output_video_path: str
     frames: int
     fps: float
+    r2_object_key: str
+    r2_url: str
+    video_signed_url: str
 
 
 @app.get("/health")
@@ -37,4 +40,7 @@ def process_video(payload: ProcessVideoRequest) -> ProcessVideoResponse:
         output_video_path=result.output_path,
         frames=result.frames,
         fps=result.fps,
+        r2_object_key=result.object_key,
+        r2_url=result.object_url,
+        video_signed_url=result.video_signed_url,
     )
