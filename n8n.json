@@ -1,0 +1,159 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -480,
+        -64
+      ],
+      "id": "93b718e3-4ec7-40a4-9026-8a7a5f16339a",
+      "name": "Telegram Trigger",
+      "webhookId": "92dcbedb-142d-416f-8207-6e864e9ce4bc",
+      "credentials": {
+        "telegramApi": {
+          "id": "z1y2PX8e5SubGgLg",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const item of $input.all()) {\n  const msg = item.json.message;\n\n  const chatId = msg?.chat?.id;\n  const fileIdRaw = msg?.video?.file_id || msg?.document?.file_id;\n  const fileId = typeof fileIdRaw === 'string' ? fileIdRaw.trim() : '';\n\n  if (!fileId) {\n    out.push({ json: { chat_id: chatId, error: 'No video found in message.' } });\n    continue;\n  }\n\n  out.push({\n    json: {\n      chat_id: chatId,\n      file_id: fileId\n    }\n  });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        176
+      ],
+      "id": "776efafa-47bc-4cc4-898c-7fe730b13331",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ion-prev-import-dip.trycloudflare.com/videos/process",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"file_id\":\"{{ $json.file_id }}\"\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -256,
+        176
+      ],
+      "id": "36293f91-6d41-4226-912d-cfdec2cd727f",
+      "name": "Analyze (Cloudflare Tunnel)"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.video_signed_url}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -80,
+        176
+      ],
+      "id": "9cc31a4b-fcf2-46b8-9076-c5a996fce489",
+      "name": "Download Video (R2 Signed URL)"
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{$node[\"Code in JavaScript1\"].json.chat_id}}",
+        "binaryData": true,
+        "binaryPropertyName": "=data",
+        "replyMarkup": "inlineKeyboard",
+        "additionalFields": {
+          "reply_to_message_id": 0
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        416
+      ],
+      "id": "893e290b-30f7-447d-9c2e-b63021a9efb5",
+      "name": "Send Video to Telegram User",
+      "webhookId": "93e58ea6-0a02-44b7-a25e-c39b1bbf981e",
+      "credentials": {
+        "telegramApi": {
+          "id": "z1y2PX8e5SubGgLg",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Analyze (Cloudflare Tunnel)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze (Cloudflare Tunnel)": {
+      "main": [
+        [
+          {
+            "node": "Download Video (R2 Signed URL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video (R2 Signed URL)": {
+      "main": [
+        [
+          {
+            "node": "Send Video to Telegram User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "45981fdfe54d7a48cd7b3a39924e965bbe380935b0645d9fffb81d1b7b321146"
+  }
+}
