@@ -5,6 +5,12 @@ import mediapipe as mp
 
 from domain.models import ProcessedVideo
 from infrastructure.model_downloader import ensure_model_exists
+from infrastructure.movement_detector_and_feedback import (
+    FrameFeatures,
+    build_feedback,
+    compute_frame_features,
+    detect_movement,
+)
 
 POSE_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 7), (0, 4), (4, 5), (5, 6), (6, 8), (9, 10),
@@ -82,6 +88,8 @@ class MediaPipePoseVideoProcessor:
         timestamp_ms = 0
         frame_time_ms = int(round(1000.0 / fps))
         frames = 0
+        features: list[FrameFeatures] = []
+        previous_shoulder_angle: float | None = None
 
         try:
             with pose_landmarker.create_from_options(options) as landmarker:
@@ -95,7 +103,13 @@ class MediaPipePoseVideoProcessor:
                     result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
                     if result.pose_landmarks:
-                        draw_pose(frame_bgr, result.pose_landmarks[0])
+                        landmarks = result.pose_landmarks[0]
+                        draw_pose(frame_bgr, landmarks)
+                        frame_features, previous_shoulder_angle = compute_frame_features(
+                            landmarks=landmarks,
+                            previous_shoulder_angle=previous_shoulder_angle,
+                        )
+                        features.append(frame_features)
 
                     writer.write(frame_bgr)
                     frames += 1
@@ -104,4 +118,12 @@ class MediaPipePoseVideoProcessor:
             capture.release()
             writer.release()
 
-        return ProcessedVideo(output_path=str(output_video), frames=frames, fps=fps)
+        movement_name = detect_movement(features)
+        technique_feedback = build_feedback(movement_name, features)
+        return ProcessedVideo(
+            output_path=str(output_video),
+            frames=frames,
+            fps=fps,
+            movement_name=movement_name,
+            technique_feedback=technique_feedback,
+        )

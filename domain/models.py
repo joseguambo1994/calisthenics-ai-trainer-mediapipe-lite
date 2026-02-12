@@ -6,6 +6,8 @@ class ProcessedVideo:
     output_path: str
     frames: int
     fps: float
+    movement_name: str
+    technique_feedback: list[str]
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,8 @@ class ProcessedVideoDelivery:
     output_path: str
     frames: int
     fps: float
+    movement_name: str
+    technique_feedback: list[str]
     object_key: str
     object_url: str
     video_signed_url: str

@@ -13,6 +13,8 @@ class ProcessVideoRequest(BaseModel):
 class ProcessVideoResponse(BaseModel):
     r2_url: str
     video_signed_url: str
+    movement_name: str
+    technique_feedback: list[str]
 
 
 @app.get("/health")
@@ -35,4 +37,6 @@ def process_video(payload: ProcessVideoRequest) -> ProcessVideoResponse:
     return ProcessVideoResponse(
         r2_url=result.object_url,
         video_signed_url=result.video_signed_url,
+        movement_name=result.movement_name,
+        technique_feedback=result.technique_feedback,
     )
