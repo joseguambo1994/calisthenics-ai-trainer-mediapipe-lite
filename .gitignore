@@ -1,0 +1,125 @@
+# ===============================
+
+# Python
+
+# ===============================
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Virtual envs
+
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging
+
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ===============================
+
+# Jupyter / Research
+
+# ===============================
+
+.ipynb_checkpoints/
+
+# ===============================
+
+# IDE / OS
+
+# ===============================
+
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ===============================
+
+# Logs
+
+# ===============================
+
+*.log
+
+# ===============================
+
+# Environment / Secrets
+
+# ===============================
+
+.env
+.env.*
+!.env.example
+
+# ===============================
+
+# Models / Large Artifacts
+
+# ===============================
+
+*.task
+*.onnx
+*.tflite
+*.pth
+*.pt
+*.h5
+
+# ===============================
+
+# Video / Media Outputs
+
+# ===============================
+
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.gif
+
+# ===============================
+
+# Temp / runtime files
+
+# ===============================
+
+tmp/
+temp/
+.cache/
+
+# ===============================
+
+# Docker
+
+# ===============================
+
+*.pid
+docker-compose.override.yml
+
+# ===============================
+
+# Testing / coverage
+
+# ===============================
+
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ===============================
+
+# Requirements lock (optional)
+
+# ===============================
+
+# Uncomment if you auto-generate
+
+# requirements.txt
