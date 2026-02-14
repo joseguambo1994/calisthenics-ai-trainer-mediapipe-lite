@@ -8,6 +8,7 @@ class ProcessedVideo:
     fps: float
     movement_name: str
     technique_feedback: list[str]
+    technique_similarity_percent: float
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class ProcessedVideoDelivery:
     fps: float
     movement_name: str
     technique_feedback: list[str]
+    technique_similarity_percent: float
     object_key: str
     object_url: str
     video_signed_url: str

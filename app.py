@@ -1,7 +1,13 @@
 from fastapi import FastAPI, HTTPException
+import logging
 from pydantic import BaseModel, Field
 
 from api.dependencies import get_use_case
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 app = FastAPI(title="Calisthenics AI Trainer API", version="1.0.0")
 
@@ -15,6 +21,7 @@ class ProcessVideoResponse(BaseModel):
     video_signed_url: str
     movement_name: str
     technique_feedback: list[str]
+    technique_similarity_percent: float
 
 
 @app.get("/health")
@@ -39,4 +46,5 @@ def process_video(payload: ProcessVideoRequest) -> ProcessVideoResponse:
         video_signed_url=result.video_signed_url,
         movement_name=result.movement_name,
         technique_feedback=result.technique_feedback,
+        technique_similarity_percent=result.technique_similarity_percent,
     )

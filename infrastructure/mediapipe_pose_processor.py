@@ -1,10 +1,14 @@
 from pathlib import Path
+import os
+from typing import Any
 
 import cv2
 import mediapipe as mp
 
 from domain.models import ProcessedVideo
+from infrastructure.landmark_baseline_evaluator import LandmarkBaselineEvaluator
 from infrastructure.model_downloader import ensure_model_exists
+from infrastructure.movement_ml_classifier import MovementKNNClassifier
 from infrastructure.movement_detector_and_feedback import (
     FrameFeatures,
     build_feedback,
@@ -24,25 +28,141 @@ POSE_CONNECTIONS = [
 
 
 def draw_pose(frame_bgr, pose_landmarks, point_radius: int = 2, line_thickness: int = 2) -> None:
+    draw_pose_with_color(
+        frame_bgr=frame_bgr,
+        pose_landmarks=pose_landmarks,
+        line_color=(0, 255, 0),
+        point_color=(0, 0, 255),
+        point_radius=point_radius,
+        line_thickness=line_thickness,
+    )
+
+
+def draw_pose_with_color(
+    frame_bgr,
+    pose_landmarks,
+    line_color: tuple[int, int, int],
+    point_color: tuple[int, int, int],
+    point_radius: int = 2,
+    line_thickness: int = 2,
+) -> None:
     height, width = frame_bgr.shape[:2]
 
     for start_idx, end_idx in POSE_CONNECTIONS:
+        if start_idx >= len(pose_landmarks) or end_idx >= len(pose_landmarks):
+            continue
         start_landmark = pose_landmarks[start_idx]
         end_landmark = pose_landmarks[end_idx]
+        if start_landmark is None or end_landmark is None:
+            continue
 
         start_x, start_y = int(start_landmark.x * width), int(start_landmark.y * height)
         end_x, end_y = int(end_landmark.x * width), int(end_landmark.y * height)
 
-        cv2.line(frame_bgr, (start_x, start_y), (end_x, end_y), (0, 255, 0), line_thickness)
+        cv2.line(frame_bgr, (start_x, start_y), (end_x, end_y), line_color, line_thickness)
 
     for landmark in pose_landmarks:
+        if landmark is None:
+            continue
         x, y = int(landmark.x * width), int(landmark.y * height)
-        cv2.circle(frame_bgr, (x, y), point_radius, (0, 0, 255), -1)
+        cv2.circle(frame_bgr, (x, y), point_radius, point_color, -1)
+
+
+def _extract_points(landmarks: list[Any]) -> dict[int, tuple[float, float]]:
+    return {idx: (float(lm.x), float(lm.y)) for idx, lm in enumerate(landmarks)}
+
+
+def _build_landmarks_for_drawing(points: dict[int, tuple[float, float]], total_landmarks: int = 33) -> list[Any]:
+    class _Point:
+        def __init__(self, x: float, y: float) -> None:
+            self.x = x
+            self.y = y
+
+    result: list[Any] = [None] * total_landmarks
+    for idx, (x, y) in points.items():
+        if 0 <= idx < total_landmarks:
+            result[idx] = _Point(x=x, y=y)
+    return result
+
+
+def _resolve_baseline_csv_path() -> Path | None:
+    env_path = os.getenv("BASELINE_LANDMARKS_CSV_PATH", "").strip()
+    if env_path:
+        candidate = Path(env_path)
+        if candidate.exists():
+            return candidate
+
+    search_roots = [
+        Path("workdir2") / "landmarks",
+        Path("videoslocalesswing360") / "landmarks",
+    ]
+    candidates: list[Path] = []
+    for root in search_roots:
+        if not root.exists():
+            continue
+        candidates.extend(root.rglob("*.landmarks.csv"))
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+def _normalize_movement_name(name: str) -> str:
+    normalized = name.strip().lower().replace("_", "-").replace(" ", "-")
+    normalized = normalized.replace("--", "-")
+    if normalized == "wing-360":
+        return "swing-360"
+    return normalized
+
+
+def _resolve_movement_baseline_csv_paths() -> dict[str, Path]:
+    movements_root = Path("movements")
+    if not movements_root.exists():
+        return {}
+
+    env_names = os.getenv("MOVEMENT_BASELINES", "").strip()
+    if env_names:
+        requested = [_normalize_movement_name(item) for item in env_names.split(",") if item.strip()]
+    else:
+        # Defaults requested for calisthenics movements in this project.
+        requested = ["swing-360", "strict-muscle-up", "olympic-muscle-up", "handstand"]
+
+    baselines: dict[str, Path] = {}
+    for movement_name in requested:
+        csv_path = movements_root / movement_name / "landmarks.csv"
+        if csv_path.exists():
+            baselines[movement_name] = csv_path
+
+    # Fallback to any movement baseline found on disk if no default/requested baseline exists.
+    if baselines:
+        return baselines
+
+    for child in movements_root.iterdir():
+        if not child.is_dir():
+            continue
+        csv_path = child / "landmarks.csv"
+        if csv_path.exists():
+            baselines[_normalize_movement_name(child.name)] = csv_path
+    return baselines
+
+
+def _feedback_label_for_movement(movement_name: str) -> str:
+    movement_name = _normalize_movement_name(movement_name)
+    if movement_name in {"swing-360", "swing360"}:
+        return "swing360"
+    if movement_name in {"strict-muscle-up", "olympic-muscle-up", "muscleup"}:
+        return "muscleup"
+    if movement_name == "handstand":
+        return "handstand"
+    return "unknown"
 
 
 class MediaPipePoseVideoProcessor:
     def __init__(self, model_path: Path) -> None:
         self._model_path = model_path
+        self._deviation_red_threshold = float(os.getenv("BASELINE_DEVIATION_RED_THRESHOLD", "0.18"))
+        self._max_deviation_for_low_score = float(os.getenv("BASELINE_LOW_SCORE_DEVIATION", "0.25"))
+        self._movement_ml_k = int(os.getenv("MOVEMENT_ML_K", "7"))
         ensure_model_exists(model_path=self._model_path)
 
     def process(self, input_video: Path, output_video: Path) -> ProcessedVideo:
@@ -71,6 +191,7 @@ class MediaPipePoseVideoProcessor:
             raise RuntimeError(f"Cannot open video: {input_video}")
 
         fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
         width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -90,6 +211,23 @@ class MediaPipePoseVideoProcessor:
         frames = 0
         features: list[FrameFeatures] = []
         previous_shoulder_angle: float | None = None
+        frame_deviation: float | None = None
+        baseline_csv_path = _resolve_baseline_csv_path()
+        baseline_evaluator = LandmarkBaselineEvaluator([], self._max_deviation_for_low_score)
+        if baseline_csv_path is not None:
+            baseline_evaluator = LandmarkBaselineEvaluator.from_csv(
+                baseline_csv_path,
+                max_deviation_for_low_score=self._max_deviation_for_low_score,
+            )
+        movement_baselines = _resolve_movement_baseline_csv_paths()
+        movement_evaluators = {
+            movement_name: LandmarkBaselineEvaluator.from_csv(
+                path,
+                max_deviation_for_low_score=self._max_deviation_for_low_score,
+            )
+            for movement_name, path in movement_baselines.items()
+        }
+        movement_classifier = MovementKNNClassifier(movement_baselines, k=self._movement_ml_k)
 
         try:
             with pose_landmarker.create_from_options(options) as landmarker:
@@ -101,15 +239,75 @@ class MediaPipePoseVideoProcessor:
                     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
                     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
                     result = landmarker.detect_for_video(mp_image, timestamp_ms)
+                    frame_deviation = None
 
                     if result.pose_landmarks:
                         landmarks = result.pose_landmarks[0]
-                        draw_pose(frame_bgr, landmarks)
+                        current_points = _extract_points(landmarks)
+                        frame_deviation = baseline_evaluator.add_observation(
+                            frame_index=frames,
+                            current_total_frames=max(1, total_frames),
+                            current_points=current_points,
+                        )
+                        movement_classifier.add_observation(current_points)
+                        for evaluator in movement_evaluators.values():
+                            evaluator.add_observation(
+                                frame_index=frames,
+                                current_total_frames=max(1, total_frames),
+                                current_points=current_points,
+                            )
+                        current_line_color = (0, 0, 255) if (
+                            frame_deviation is not None and frame_deviation > self._deviation_red_threshold
+                        ) else (0, 255, 0)
+                        draw_pose_with_color(
+                            frame_bgr=frame_bgr,
+                            pose_landmarks=landmarks,
+                            line_color=current_line_color,
+                            point_color=(0, 0, 255),
+                        )
+                        if baseline_evaluator.has_baseline:
+                            baseline_points = baseline_evaluator.baseline_points_for_frame(
+                                frame_index=frames,
+                                current_total_frames=max(1, total_frames),
+                            )
+                            if baseline_points:
+                                baseline_landmarks = _build_landmarks_for_drawing(baseline_points)
+                                draw_pose_with_color(
+                                    frame_bgr=frame_bgr,
+                                    pose_landmarks=baseline_landmarks,
+                                    line_color=(255, 255, 0),
+                                    point_color=(255, 255, 0),
+                                    point_radius=2,
+                                    line_thickness=1,
+                                )
                         frame_features, previous_shoulder_angle = compute_frame_features(
                             landmarks=landmarks,
                             previous_shoulder_angle=previous_shoulder_angle,
                         )
                         features.append(frame_features)
+
+                    similarity_live = baseline_evaluator.similarity_percent()
+                    deviation_text = "n/a" if frame_deviation is None else f"{frame_deviation:.3f}"
+                    cv2.putText(
+                        frame_bgr,
+                        f"Similitud: {similarity_live:.1f}%",
+                        (20, 35),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.8,
+                        (255, 255, 255),
+                        2,
+                        cv2.LINE_AA,
+                    )
+                    cv2.putText(
+                        frame_bgr,
+                        f"Deviation: {deviation_text}",
+                        (20, 65),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        (255, 255, 255),
+                        2,
+                        cv2.LINE_AA,
+                    )
 
                     writer.write(frame_bgr)
                     frames += 1
@@ -119,11 +317,32 @@ class MediaPipePoseVideoProcessor:
             writer.release()
 
         movement_name = detect_movement(features)
-        technique_feedback = build_feedback(movement_name, features)
+        movement_similarity: dict[str, float] = {}
+        if movement_classifier.has_model:
+            ml_prediction = movement_classifier.predict()
+            movement_similarity = ml_prediction.label_scores
+            if ml_prediction.movement_name != "unknown":
+                movement_name = ml_prediction.movement_name
+                technique_similarity_percent = ml_prediction.similarity_percent
+            else:
+                technique_similarity_percent = baseline_evaluator.similarity_percent()
+        else:
+            movement_similarity = {
+                movement: evaluator.similarity_percent()
+                for movement, evaluator in movement_evaluators.items()
+                if evaluator.has_baseline
+            }
+            if movement_similarity:
+                movement_name = max(movement_similarity, key=movement_similarity.get)
+                technique_similarity_percent = movement_similarity[movement_name]
+            else:
+                technique_similarity_percent = baseline_evaluator.similarity_percent()
+        technique_feedback = build_feedback(_feedback_label_for_movement(movement_name), features)
         return ProcessedVideo(
             output_path=str(output_video),
             frames=frames,
             fps=fps,
             movement_name=movement_name,
             technique_feedback=technique_feedback,
+            technique_similarity_percent=technique_similarity_percent,
         )

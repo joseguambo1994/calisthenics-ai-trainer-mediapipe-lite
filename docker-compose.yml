@@ -16,4 +16,6 @@ services:
       R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:-}
       R2_SIGNED_URL_EXPIRATION_SECONDS: ${R2_SIGNED_URL_EXPIRATION_SECONDS:-3600}
       WORKSPACE_DIR: /app/workdir
+    volumes:
+      - ./workdir:/app/workdir
     restart: unless-stopped
