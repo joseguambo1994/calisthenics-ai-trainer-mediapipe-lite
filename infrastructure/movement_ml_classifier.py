@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Iterable
 
 import numpy as np
 
@@ -17,7 +18,7 @@ class MLMovementPrediction:
 
 
 class MovementKNNClassifier:
-    def __init__(self, baseline_csvs: dict[str, Path], k: int = 7) -> None:
+    def __init__(self, baseline_csvs: dict[str, Path | Iterable[Path]] | None = None, k: int = 7) -> None:
         self._k = max(1, int(k))
         self._labels: list[str] = []
         self._x_train = np.zeros((0, len(KEY_LANDMARKS) * 2), dtype=np.float32)
@@ -25,7 +26,8 @@ class MovementKNNClassifier:
         self._score_sums: dict[str, float] = {}
         self._distance_sums: dict[str, float] = {}
         self._distance_counts: dict[str, int] = {}
-        self._fit_from_csvs(baseline_csvs)
+        if baseline_csvs:
+            self._fit_from_csvs(baseline_csvs)
 
     @property
     def has_model(self) -> bool:
@@ -81,30 +83,71 @@ class MovementKNNClassifier:
             label_scores=label_scores,
         )
 
-    def _fit_from_csvs(self, baseline_csvs: dict[str, Path]) -> None:
+    def save_model(self, model_path: Path) -> None:
+        if not self.has_model:
+            raise RuntimeError("Cannot save movement model because training set is empty.")
+
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            str(model_path),
+            x_train=self._x_train.astype(np.float32),
+            y_train=np.array(self._y_train, dtype=np.str_),
+            labels=np.array(self._labels, dtype=np.str_),
+            k=np.array([self._k], dtype=np.int64),
+            key_landmarks=np.array(KEY_LANDMARKS, dtype=np.int64),
+        )
+
+    @classmethod
+    def load_model(cls, model_path: Path) -> "MovementKNNClassifier":
+        if not model_path.exists():
+            raise FileNotFoundError(f"Missing movement model: {model_path}")
+
+        data = np.load(str(model_path), allow_pickle=False)
+        key_landmarks = [int(v) for v in data["key_landmarks"].tolist()]
+        if key_landmarks != KEY_LANDMARKS:
+            raise RuntimeError(
+                "Incompatible movement model: expected KEY_LANDMARKS "
+                f"{KEY_LANDMARKS}, got {key_landmarks}"
+            )
+
+        k = int(np.array(data["k"]).reshape(-1)[0])
+        classifier = cls(baseline_csvs=None, k=k)
+        classifier._x_train = np.array(data["x_train"], dtype=np.float32)
+        classifier._y_train = [str(v) for v in data["y_train"].tolist()]
+        classifier._labels = [str(v) for v in data["labels"].tolist()]
+        return classifier
+
+    @staticmethod
+    def _as_path_list(csv_sources: Path | Iterable[Path]) -> list[Path]:
+        if isinstance(csv_sources, Path):
+            return [csv_sources]
+        return [path for path in csv_sources]
+
+    def _fit_from_csvs(self, baseline_csvs: dict[str, Path | Iterable[Path]]) -> None:
         vectors: list[np.ndarray] = []
         labels: list[str] = []
 
-        for movement_name, csv_path in baseline_csvs.items():
-            if not csv_path.exists():
-                continue
-            with csv_path.open("r", encoding="utf-8", newline="") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if str(row.get("pose_detected", "")).lower() not in {"true", "1"}:
-                        continue
-                    points: dict[int, tuple[float, float]] = {}
-                    for idx in KEY_LANDMARKS:
-                        x = row.get(f"lm_{idx}_x")
-                        y = row.get(f"lm_{idx}_y")
-                        if x in (None, "", "None") or y in (None, "", "None"):
+        for movement_name, csv_sources in baseline_csvs.items():
+            for csv_path in self._as_path_list(csv_sources):
+                if not csv_path.exists():
+                    continue
+                with csv_path.open("r", encoding="utf-8", newline="") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        if str(row.get("pose_detected", "")).lower() not in {"true", "1"}:
                             continue
-                        points[idx] = (float(x), float(y))
-                    vector = self._vectorize_points(points)
-                    if vector is None:
-                        continue
-                    vectors.append(vector)
-                    labels.append(movement_name)
+                        points: dict[int, tuple[float, float]] = {}
+                        for idx in KEY_LANDMARKS:
+                            x = row.get(f"lm_{idx}_x")
+                            y = row.get(f"lm_{idx}_y")
+                            if x in (None, "", "None") or y in (None, "", "None"):
+                                continue
+                            points[idx] = (float(x), float(y))
+                        vector = self._vectorize_points(points)
+                        if vector is None:
+                            continue
+                        vectors.append(vector)
+                        labels.append(movement_name)
 
         if not vectors:
             return

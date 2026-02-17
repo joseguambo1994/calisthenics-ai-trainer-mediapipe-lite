@@ -3,7 +3,11 @@ from fastapi.responses import JSONResponse
 import logging
 from pydantic import BaseModel, Field
 
-from api.dependencies import get_generate_landmarks_use_case, get_use_case
+from api.dependencies import (
+    get_generate_landmarks_use_case,
+    get_train_movement_model_use_case,
+    get_use_case,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,6 +34,34 @@ class GenerateLandmarksSuccessResponse(BaseModel):
 
 
 class GenerateLandmarksErrorResponse(BaseModel):
+    errors: list[str]
+
+
+class TrainMovementModelRequest(BaseModel):
+    k: int | None = Field(
+        default=None,
+        ge=1,
+        description="Optional k value for the KNN template model.",
+    )
+
+    model_config = {
+        "extra": "forbid",
+        "json_schema_extra": {
+            "examples": [
+                {"k": 7},
+                {},
+            ]
+        }
+    }
+
+
+class TrainMovementModelSuccessResponse(BaseModel):
+    model_path: str
+    movements_trained: list[str]
+    template_files: int
+
+
+class TrainMovementModelErrorResponse(BaseModel):
     errors: list[str]
 
 
@@ -86,3 +118,40 @@ def generate_landmarks() -> GenerateLandmarksSuccessResponse | JSONResponse:
         )
 
     return GenerateLandmarksSuccessResponse(generated_movements=result.generated_movements)
+
+
+@app.post(
+    "/movement-model/train",
+    response_model=TrainMovementModelSuccessResponse,
+    responses={
+        500: {
+            "model": TrainMovementModelErrorResponse,
+            "description": "Movement model training failed.",
+        }
+    },
+)
+def train_movement_model(
+    payload: TrainMovementModelRequest,
+) -> TrainMovementModelSuccessResponse | JSONResponse:
+    try:
+        use_case = get_train_movement_model_use_case()
+        result = use_case.execute(
+            k=payload.k,
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content=TrainMovementModelErrorResponse(errors=[str(exc)]).model_dump(),
+        )
+
+    if result.errors:
+        return JSONResponse(
+            status_code=500,
+            content=TrainMovementModelErrorResponse(errors=result.errors).model_dump(),
+        )
+
+    return TrainMovementModelSuccessResponse(
+        model_path=result.model_path,
+        movements_trained=result.movements_trained,
+        template_files=result.template_files,
+    )

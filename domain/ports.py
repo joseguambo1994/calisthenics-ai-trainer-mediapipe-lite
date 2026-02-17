@@ -1,7 +1,12 @@
 from pathlib import Path
 from typing import Protocol
 
-from domain.models import LandmarksGenerationResult, ProcessedVideo, StoredObject
+from domain.models import (
+    LandmarksGenerationResult,
+    MovementModelTrainingResult,
+    ProcessedVideo,
+    StoredObject,
+)
 
 
 class TelegramVideoGateway(Protocol):
@@ -26,4 +31,12 @@ class ObjectStorageGateway(Protocol):
 
 class MovementLandmarksGenerator(Protocol):
     def generate(self) -> LandmarksGenerationResult:
+        ...
+
+
+class MovementTemplateModelTrainer(Protocol):
+    def train(
+        self,
+        k: int | None = None,
+    ) -> MovementModelTrainingResult:
         ...

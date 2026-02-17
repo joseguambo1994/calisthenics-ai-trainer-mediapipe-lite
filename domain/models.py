@@ -35,3 +35,11 @@ class ProcessedVideoDelivery:
 class LandmarksGenerationResult:
     generated_movements: list[str]
     errors: list[str]
+
+
+@dataclass(frozen=True)
+class MovementModelTrainingResult:
+    model_path: str
+    movements_trained: list[str]
+    template_files: int
+    errors: list[str]

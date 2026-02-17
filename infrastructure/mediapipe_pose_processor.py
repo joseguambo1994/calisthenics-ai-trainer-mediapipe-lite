@@ -115,7 +115,7 @@ def _normalize_movement_name(name: str) -> str:
     return normalized
 
 
-def _resolve_movement_baseline_csv_paths() -> dict[str, Path]:
+def _resolve_movement_baseline_csv_paths() -> dict[str, list[Path]]:
     movements_root = Path("movements")
     if not movements_root.exists():
         return {}
@@ -127,11 +127,14 @@ def _resolve_movement_baseline_csv_paths() -> dict[str, Path]:
         # Defaults requested for calisthenics movements in this project.
         requested = ["swing-360", "strict-muscle-up", "olympic-muscle-up", "handstand"]
 
-    baselines: dict[str, Path] = {}
+    baselines: dict[str, list[Path]] = {}
     for movement_name in requested:
-        csv_path = movements_root / movement_name / "landmarks.csv"
-        if csv_path.exists():
-            baselines[movement_name] = csv_path
+        movement_dir = movements_root / movement_name
+        if not movement_dir.exists() or not movement_dir.is_dir():
+            continue
+        csv_paths = sorted(movement_dir.rglob("landmarks.csv"))
+        if csv_paths:
+            baselines[movement_name] = csv_paths
 
     # Fallback to any movement baseline found on disk if no default/requested baseline exists.
     if baselines:
@@ -140,10 +143,17 @@ def _resolve_movement_baseline_csv_paths() -> dict[str, Path]:
     for child in movements_root.iterdir():
         if not child.is_dir():
             continue
-        csv_path = child / "landmarks.csv"
-        if csv_path.exists():
-            baselines[_normalize_movement_name(child.name)] = csv_path
+        csv_paths = sorted(child.rglob("landmarks.csv"))
+        if csv_paths:
+            baselines[_normalize_movement_name(child.name)] = csv_paths
     return baselines
+
+
+def _resolve_movement_model_path() -> Path:
+    model_path = os.getenv("MOVEMENT_MODEL_PATH", "").strip()
+    if model_path:
+        return Path(model_path)
+    return Path("models") / "movement_template_model.npz"
 
 
 def _feedback_label_for_movement(movement_name: str) -> str:
@@ -163,6 +173,7 @@ class MediaPipePoseVideoProcessor:
         self._deviation_red_threshold = float(os.getenv("BASELINE_DEVIATION_RED_THRESHOLD", "0.18"))
         self._max_deviation_for_low_score = float(os.getenv("BASELINE_LOW_SCORE_DEVIATION", "0.25"))
         self._movement_ml_k = int(os.getenv("MOVEMENT_ML_K", "7"))
+        self._movement_model_path = _resolve_movement_model_path()
         ensure_model_exists(model_path=self._model_path)
 
     def process(self, input_video: Path, output_video: Path) -> ProcessedVideo:
@@ -222,12 +233,16 @@ class MediaPipePoseVideoProcessor:
         movement_baselines = _resolve_movement_baseline_csv_paths()
         movement_evaluators = {
             movement_name: LandmarkBaselineEvaluator.from_csv(
-                path,
+                paths[0],
                 max_deviation_for_low_score=self._max_deviation_for_low_score,
             )
-            for movement_name, path in movement_baselines.items()
+            for movement_name, paths in movement_baselines.items()
+            if paths
         }
-        movement_classifier = MovementKNNClassifier(movement_baselines, k=self._movement_ml_k)
+        try:
+            movement_classifier = MovementKNNClassifier.load_model(self._movement_model_path)
+        except Exception:
+            movement_classifier = MovementKNNClassifier()
 
         try:
             with pose_landmarker.create_from_options(options) as landmarker:
