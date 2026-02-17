@@ -7,17 +7,17 @@ Authors: **Jose Guambo** and **Aaron Echeverria**
 ## Dataset Advancement (Movement x Angle)
 
 Status legend:
-- `Check`: at least one `.mp4` exists in that movement/angle folder
-- `X`: not completed yet
+- `✅`: at least one `.mp4` exists in that movement/angle folder
+- `❌`: not completed yet
 
 | Movement | Back | Diagonal | Side |
 |---|---|---|---|
-| double-swing-360 | X | X | X |
-| dragon-360 | X | Check | Check |
-| geinger | Check | Check | Check |
-| handstand | X | Check | Check |
-| olympic-muscle-up | Check | Check | Check |
-| pasavallas | X | X | X |
-| strict-muscle-up | Check | Check | Check |
-| swing-360 | Check | Check | Check |
-| torero | X | Check | X |
+| double-swing-360 | ❌ | ❌ | ❌ |
+| dragon-360 | ❌ | ✅ | ✅ |
+| geinger | ✅ | ✅ | ✅ |
+| handstand | ❌ | ✅ | ✅ |
+| olympic-muscle-up | ✅ | ✅ | ✅ |
+| pasavallas | ❌ | ❌ | ❌ |
+| strict-muscle-up | ✅ | ✅ | ✅ |
+| swing-360 | ✅ | ✅ | ✅ |
+| torero | ❌ | ✅ | ❌ |
