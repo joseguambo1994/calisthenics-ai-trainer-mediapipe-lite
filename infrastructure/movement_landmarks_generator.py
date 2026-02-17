@@ -90,9 +90,7 @@ def _iter_movement_videos(movements_dir: Path) -> list[Path]:
     for child in sorted(movements_dir.iterdir()):
         if not child.is_dir():
             continue
-        video_path = child / "video.mp4"
-        if video_path.exists():
-            video_paths.append(video_path)
+        video_paths.extend(sorted(child.rglob("video.mp4")))
     return video_paths
 
 
@@ -190,7 +188,7 @@ class MediaPipeMovementLandmarksGenerator:
 
         for video_path in video_paths:
             movement_dir = video_path.parent
-            movement_name = movement_dir.name
+            movement_name = movement_dir.relative_to(self._movements_dir).as_posix()
             csv_path = movement_dir / "landmarks.csv"
             json_path = movement_dir / "landmarks.json"
             try:
