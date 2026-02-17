@@ -229,6 +229,7 @@ class MediaPipePoseVideoProcessor:
 
         try:
             with pose_landmarker.create_from_options(options) as landmarker:
+                overlay_movement_name = "unknown"
                 while True:
                     ok, frame_bgr = capture.read()
                     if not ok:
@@ -245,6 +246,8 @@ class MediaPipePoseVideoProcessor:
                         current_points = _extract_points(landmarks)
                         movement_classifier.add_observation(current_points)
                         live_prediction = movement_classifier.predict()
+                        if live_prediction.movement_name != "unknown":
+                            overlay_movement_name = live_prediction.movement_name
                         live_evaluator: LandmarkBaselineEvaluator | None = None
                         if live_prediction.movement_name != "unknown":
                             live_evaluator = movement_evaluators.get(
@@ -288,25 +291,24 @@ class MediaPipePoseVideoProcessor:
                         )
                         features.append(frame_features)
 
-                    deviation_text = "n/a" if frame_deviation is None else f"{frame_deviation:.3f}"
                     cv2.putText(
                         frame_bgr,
-                        f"Similitud: {similarity_live:.1f}%",
+                        f"Similarity: {similarity_live:.1f}%",
                         (20, 35),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.8,
-                        (255, 255, 255),
-                        2,
+                        1.15,
+                        (0, 0, 0),
+                        5,
                         cv2.LINE_AA,
                     )
                     cv2.putText(
                         frame_bgr,
-                        f"Deviation: {deviation_text}",
+                        f"Movement: {overlay_movement_name}",
                         (20, 65),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.6,
-                        (255, 255, 255),
-                        2,
+                        0.95,
+                        (0, 0, 0),
+                        5,
                         cv2.LINE_AA,
                     )
 
@@ -323,6 +325,10 @@ class MediaPipePoseVideoProcessor:
             movement_name = ml_prediction.movement_name
         technique_similarity_percent = ml_prediction.similarity_percent
         technique_feedback = build_feedback(_feedback_label_for_movement(movement_name), features)
+        technique_feedback = [
+            f"Overall similarity: {technique_similarity_percent:.1f}%",
+            *technique_feedback,
+        ]
         selected_template_source: str | None = None
         selected_template_landmarks: list[dict[int, tuple[float, float]]] = []
         normalized_movement = _normalize_movement_name(movement_name)
