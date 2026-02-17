@@ -27,6 +27,14 @@ class ProcessVideoResponse(BaseModel):
     movement_name: str
     technique_feedback: list[str]
     technique_similarity_percent: float
+    template_landmarks_source: str | None = Field(
+        default=None,
+        description="Template landmarks CSV used as reference for the predicted movement.",
+    )
+    template_landmarks: list[dict[int, tuple[float, float]]] = Field(
+        default_factory=list,
+        description="Template landmark frames used to draw the ideal execution pose sequence.",
+    )
 
 
 class GenerateLandmarksSuccessResponse(BaseModel):
@@ -88,6 +96,8 @@ def process_video(payload: ProcessVideoRequest) -> ProcessVideoResponse:
         movement_name=result.movement_name,
         technique_feedback=result.technique_feedback,
         technique_similarity_percent=result.technique_similarity_percent,
+        template_landmarks_source=result.template_landmarks_source,
+        template_landmarks=result.template_landmarks,
     )
 
 

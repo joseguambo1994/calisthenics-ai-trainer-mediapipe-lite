@@ -156,6 +156,17 @@ def _resolve_movement_model_path() -> Path:
     return Path("models") / "movement_template_model.npz"
 
 
+def _resolve_template_landmarks_max_frames() -> int | None:
+    raw = os.getenv("TEMPLATE_LANDMARKS_MAX_FRAMES", "180").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 180
+    if value <= 0:
+        return None
+    return value
+
+
 def _feedback_label_for_movement(movement_name: str) -> str:
     movement_name = _normalize_movement_name(movement_name)
     if movement_name in {"swing-360", "swing360"}:
@@ -174,6 +185,7 @@ class MediaPipePoseVideoProcessor:
         self._max_deviation_for_low_score = float(os.getenv("BASELINE_LOW_SCORE_DEVIATION", "0.25"))
         self._movement_ml_k = int(os.getenv("MOVEMENT_ML_K", "7"))
         self._movement_model_path = _resolve_movement_model_path()
+        self._template_landmarks_max_frames = _resolve_template_landmarks_max_frames()
         ensure_model_exists(model_path=self._model_path)
 
     def process(self, input_video: Path, output_video: Path) -> ProcessedVideo:
@@ -239,10 +251,18 @@ class MediaPipePoseVideoProcessor:
             for movement_name, paths in movement_baselines.items()
             if paths
         }
+        movement_template_csvs = {
+            movement_name: paths[0]
+            for movement_name, paths in movement_baselines.items()
+            if paths
+        }
         try:
             movement_classifier = MovementKNNClassifier.load_model(self._movement_model_path)
-        except Exception:
-            movement_classifier = MovementKNNClassifier()
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to load trained movement model. "
+                "Run /movement-model/train before processing videos."
+            ) from exc
 
         try:
             with pose_landmarker.create_from_options(options) as landmarker:
@@ -265,12 +285,6 @@ class MediaPipePoseVideoProcessor:
                             current_points=current_points,
                         )
                         movement_classifier.add_observation(current_points)
-                        for evaluator in movement_evaluators.values():
-                            evaluator.add_observation(
-                                frame_index=frames,
-                                current_total_frames=max(1, total_frames),
-                                current_points=current_points,
-                            )
                         current_line_color = (0, 0, 255) if (
                             frame_deviation is not None and frame_deviation > self._deviation_red_threshold
                         ) else (0, 255, 0)
@@ -332,27 +346,22 @@ class MediaPipePoseVideoProcessor:
             writer.release()
 
         movement_name = detect_movement(features)
-        movement_similarity: dict[str, float] = {}
-        if movement_classifier.has_model:
-            ml_prediction = movement_classifier.predict()
-            movement_similarity = ml_prediction.label_scores
-            if ml_prediction.movement_name != "unknown":
-                movement_name = ml_prediction.movement_name
-                technique_similarity_percent = ml_prediction.similarity_percent
-            else:
-                technique_similarity_percent = baseline_evaluator.similarity_percent()
-        else:
-            movement_similarity = {
-                movement: evaluator.similarity_percent()
-                for movement, evaluator in movement_evaluators.items()
-                if evaluator.has_baseline
-            }
-            if movement_similarity:
-                movement_name = max(movement_similarity, key=movement_similarity.get)
-                technique_similarity_percent = movement_similarity[movement_name]
-            else:
-                technique_similarity_percent = baseline_evaluator.similarity_percent()
+        ml_prediction = movement_classifier.predict()
+        if ml_prediction.movement_name != "unknown":
+            movement_name = ml_prediction.movement_name
+        technique_similarity_percent = ml_prediction.similarity_percent
         technique_feedback = build_feedback(_feedback_label_for_movement(movement_name), features)
+        selected_template_source: str | None = None
+        selected_template_landmarks: list[dict[int, tuple[float, float]]] = []
+        normalized_movement = _normalize_movement_name(movement_name)
+        selected_evaluator = movement_evaluators.get(normalized_movement)
+        selected_csv = movement_template_csvs.get(normalized_movement)
+        if selected_evaluator is not None and selected_evaluator.has_baseline:
+            selected_template_landmarks = selected_evaluator.export_baseline_frames(
+                max_frames=self._template_landmarks_max_frames,
+            )
+        if selected_csv is not None:
+            selected_template_source = str(selected_csv)
         return ProcessedVideo(
             output_path=str(output_video),
             frames=frames,
@@ -360,4 +369,6 @@ class MediaPipePoseVideoProcessor:
             movement_name=movement_name,
             technique_feedback=technique_feedback,
             technique_similarity_percent=technique_similarity_percent,
+            template_landmarks_source=selected_template_source,
+            template_landmarks=selected_template_landmarks,
         )

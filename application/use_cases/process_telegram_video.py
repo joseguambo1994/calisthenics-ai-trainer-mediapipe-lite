@@ -48,6 +48,8 @@ class ProcessTelegramVideoUseCase:
                 movement_name=processed_video.movement_name,
                 technique_feedback=processed_video.technique_feedback,
                 technique_similarity_percent=processed_video.technique_similarity_percent,
+                template_landmarks_source=processed_video.template_landmarks_source,
+                template_landmarks=processed_video.template_landmarks,
                 object_key=stored_object.object_key,
                 object_url=stored_object.object_url,
                 video_signed_url=stored_object.signed_url,

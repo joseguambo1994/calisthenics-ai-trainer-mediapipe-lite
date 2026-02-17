@@ -66,8 +66,39 @@ class LandmarkBaselineEvaluator:
             return 10.0
         mean_deviation = float(np.mean(self._frame_deviations))
         normalized = float(np.clip(mean_deviation / self._max_deviation_for_low_score, 0.0, 1.0))
-        # 100% means very close to baseline, 10% means too much deviation.
         return float(np.clip(100.0 - 90.0 * normalized, 10.0, 100.0))
+
+    def export_baseline_frames(
+        self,
+        landmark_ids: list[int] | None = None,
+        max_frames: int | None = None,
+    ) -> list[dict[int, tuple[float, float]]]:
+        if not self._baseline_frames:
+            return []
+
+        total = len(self._baseline_frames)
+        if max_frames is not None and max_frames > 0 and total > max_frames:
+            sample_idxs = np.linspace(0, total - 1, num=max_frames, dtype=int)
+        else:
+            sample_idxs = np.arange(total, dtype=int)
+
+        exported: list[dict[int, tuple[float, float]]] = []
+        for idx in sample_idxs.tolist():
+            frame_points = self._baseline_frames[idx].points
+            if landmark_ids is None:
+                exported.append({
+                    int(lm_idx): (float(point[0]), float(point[1]))
+                    for lm_idx, point in frame_points.items()
+                })
+                continue
+
+            exported.append({
+                int(lm_idx): (float(frame_points[lm_idx][0]), float(frame_points[lm_idx][1]))
+                for lm_idx in landmark_ids
+                if lm_idx in frame_points
+            })
+
+        return exported
 
     def _map_index(self, frame_index: int, current_total_frames: int) -> int:
         if len(self._baseline_frames) == 1:

@@ -9,6 +9,8 @@ class ProcessedVideo:
     movement_name: str
     technique_feedback: list[str]
     technique_similarity_percent: float
+    template_landmarks_source: str | None
+    template_landmarks: list[dict[int, tuple[float, float]]]
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,8 @@ class ProcessedVideoDelivery:
     movement_name: str
     technique_feedback: list[str]
     technique_similarity_percent: float
+    template_landmarks_source: str | None
+    template_landmarks: list[dict[int, tuple[float, float]]]
     object_key: str
     object_url: str
     video_signed_url: str
