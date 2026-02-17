@@ -85,28 +85,6 @@ def _build_landmarks_for_drawing(points: dict[int, tuple[float, float]], total_l
     return result
 
 
-def _resolve_baseline_csv_path() -> Path | None:
-    env_path = os.getenv("BASELINE_LANDMARKS_CSV_PATH", "").strip()
-    if env_path:
-        candidate = Path(env_path)
-        if candidate.exists():
-            return candidate
-
-    search_roots = [
-        Path("workdir2") / "landmarks",
-        Path("videoslocalesswing360") / "landmarks",
-    ]
-    candidates: list[Path] = []
-    for root in search_roots:
-        if not root.exists():
-            continue
-        candidates.extend(root.rglob("*.landmarks.csv"))
-
-    if not candidates:
-        return None
-    return max(candidates, key=lambda p: p.stat().st_mtime)
-
-
 def _normalize_movement_name(name: str) -> str:
     normalized = name.strip().lower().replace("_", "-").replace(" ", "-")
     normalized = normalized.replace("--", "-")
@@ -121,31 +99,25 @@ def _resolve_movement_baseline_csv_paths() -> dict[str, list[Path]]:
         return {}
 
     env_names = os.getenv("MOVEMENT_BASELINES", "").strip()
+    requested_set: set[str] | None = None
     if env_names:
-        requested = [_normalize_movement_name(item) for item in env_names.split(",") if item.strip()]
-    else:
-        # Defaults requested for calisthenics movements in this project.
-        requested = ["swing-360", "strict-muscle-up", "olympic-muscle-up", "handstand"]
+        requested_set = {
+            _normalize_movement_name(item)
+            for item in env_names.split(",")
+            if item.strip()
+        }
 
     baselines: dict[str, list[Path]] = {}
-    for movement_name in requested:
-        movement_dir = movements_root / movement_name
-        if not movement_dir.exists() or not movement_dir.is_dir():
+    for movement_dir in sorted(movements_root.iterdir()):
+        if not movement_dir.is_dir():
+            continue
+        movement_name = _normalize_movement_name(movement_dir.name)
+        if requested_set is not None and movement_name not in requested_set:
             continue
         csv_paths = sorted(movement_dir.rglob("landmarks.csv"))
         if csv_paths:
             baselines[movement_name] = csv_paths
 
-    # Fallback to any movement baseline found on disk if no default/requested baseline exists.
-    if baselines:
-        return baselines
-
-    for child in movements_root.iterdir():
-        if not child.is_dir():
-            continue
-        csv_paths = sorted(child.rglob("landmarks.csv"))
-        if csv_paths:
-            baselines[_normalize_movement_name(child.name)] = csv_paths
     return baselines
 
 
@@ -181,9 +153,7 @@ def _feedback_label_for_movement(movement_name: str) -> str:
 class MediaPipePoseVideoProcessor:
     def __init__(self, model_path: Path) -> None:
         self._model_path = model_path
-        self._deviation_red_threshold = float(os.getenv("BASELINE_DEVIATION_RED_THRESHOLD", "0.18"))
         self._max_deviation_for_low_score = float(os.getenv("BASELINE_LOW_SCORE_DEVIATION", "0.25"))
-        self._movement_ml_k = int(os.getenv("MOVEMENT_ML_K", "7"))
         self._movement_model_path = _resolve_movement_model_path()
         self._template_landmarks_max_frames = _resolve_template_landmarks_max_frames()
         ensure_model_exists(model_path=self._model_path)
@@ -235,13 +205,6 @@ class MediaPipePoseVideoProcessor:
         features: list[FrameFeatures] = []
         previous_shoulder_angle: float | None = None
         frame_deviation: float | None = None
-        baseline_csv_path = _resolve_baseline_csv_path()
-        baseline_evaluator = LandmarkBaselineEvaluator([], self._max_deviation_for_low_score)
-        if baseline_csv_path is not None:
-            baseline_evaluator = LandmarkBaselineEvaluator.from_csv(
-                baseline_csv_path,
-                max_deviation_for_low_score=self._max_deviation_for_low_score,
-            )
         movement_baselines = _resolve_movement_baseline_csv_paths()
         movement_evaluators = {
             movement_name: LandmarkBaselineEvaluator.from_csv(
@@ -275,47 +238,56 @@ class MediaPipePoseVideoProcessor:
                     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
                     result = landmarker.detect_for_video(mp_image, timestamp_ms)
                     frame_deviation = None
+                    similarity_live = 10.0
 
                     if result.pose_landmarks:
                         landmarks = result.pose_landmarks[0]
                         current_points = _extract_points(landmarks)
-                        frame_deviation = baseline_evaluator.add_observation(
-                            frame_index=frames,
-                            current_total_frames=max(1, total_frames),
-                            current_points=current_points,
-                        )
                         movement_classifier.add_observation(current_points)
-                        current_line_color = (0, 0, 255) if (
-                            frame_deviation is not None and frame_deviation > self._deviation_red_threshold
-                        ) else (0, 255, 0)
+                        live_prediction = movement_classifier.predict()
+                        live_evaluator: LandmarkBaselineEvaluator | None = None
+                        if live_prediction.movement_name != "unknown":
+                            live_evaluator = movement_evaluators.get(
+                                _normalize_movement_name(live_prediction.movement_name)
+                            )
+                        baseline_points: dict[int, tuple[float, float]] | None = None
+                        if live_evaluator is not None and live_evaluator.has_baseline:
+                            frame_deviation = live_evaluator.add_observation(
+                                frame_index=frames,
+                                current_total_frames=max(1, total_frames),
+                                current_points=current_points,
+                            )
+                            baseline_points = live_evaluator.baseline_points_for_frame(
+                                frame_index=frames,
+                                current_total_frames=max(1, total_frames),
+                            )
+                            similarity_live = live_evaluator.similarity_percent()
+                        else:
+                            similarity_live = live_prediction.similarity_percent
+                        # Draw athlete attempt first (red), then template (green) on top.
+                        current_line_color = (0, 0, 255)
                         draw_pose_with_color(
                             frame_bgr=frame_bgr,
                             pose_landmarks=landmarks,
                             line_color=current_line_color,
                             point_color=(0, 0, 255),
                         )
-                        if baseline_evaluator.has_baseline:
-                            baseline_points = baseline_evaluator.baseline_points_for_frame(
-                                frame_index=frames,
-                                current_total_frames=max(1, total_frames),
+                        if baseline_points:
+                            baseline_landmarks = _build_landmarks_for_drawing(baseline_points)
+                            draw_pose_with_color(
+                                frame_bgr=frame_bgr,
+                                pose_landmarks=baseline_landmarks,
+                                line_color=(0, 255, 0),
+                                point_color=(0, 255, 0),
+                                point_radius=2,
+                                line_thickness=1,
                             )
-                            if baseline_points:
-                                baseline_landmarks = _build_landmarks_for_drawing(baseline_points)
-                                draw_pose_with_color(
-                                    frame_bgr=frame_bgr,
-                                    pose_landmarks=baseline_landmarks,
-                                    line_color=(255, 255, 0),
-                                    point_color=(255, 255, 0),
-                                    point_radius=2,
-                                    line_thickness=1,
-                                )
                         frame_features, previous_shoulder_angle = compute_frame_features(
                             landmarks=landmarks,
                             previous_shoulder_angle=previous_shoulder_angle,
                         )
                         features.append(frame_features)
 
-                    similarity_live = baseline_evaluator.similarity_percent()
                     deviation_text = "n/a" if frame_deviation is None else f"{frame_deviation:.3f}"
                     cv2.putText(
                         frame_bgr,
