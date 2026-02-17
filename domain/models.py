@@ -29,3 +29,9 @@ class ProcessedVideoDelivery:
     object_key: str
     object_url: str
     video_signed_url: str
+
+
+@dataclass(frozen=True)
+class LandmarksGenerationResult:
+    generated_movements: list[str]
+    errors: list[str]

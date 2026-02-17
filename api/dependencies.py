@@ -2,9 +2,11 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
+from application.use_cases.generate_movement_landmarks import GenerateMovementLandmarksUseCase
 from application.use_cases.process_telegram_video import ProcessTelegramVideoUseCase
 from infrastructure.cloudflare_r2_storage import CloudflareR2StorageGateway
 from infrastructure.mediapipe_pose_processor import MediaPipePoseVideoProcessor
+from infrastructure.movement_landmarks_generator import MediaPipeMovementLandmarksGenerator
 from infrastructure.telegram_bot_gateway import TelegramBotGateway
 
 
@@ -51,3 +53,14 @@ def get_use_case() -> ProcessTelegramVideoUseCase:
         storage=storage,
         workspace_dir=workspace,
     )
+
+
+@lru_cache(maxsize=1)
+def get_generate_landmarks_use_case() -> GenerateMovementLandmarksUseCase:
+    movements_dir = Path(os.getenv("MOVEMENTS_DIR", "movements"))
+    model_path = Path(os.getenv("MODEL_PATH", "pose_landmarker_lite.task"))
+    generator = MediaPipeMovementLandmarksGenerator(
+        movements_dir=movements_dir,
+        model_path=model_path,
+    )
+    return GenerateMovementLandmarksUseCase(generator=generator)

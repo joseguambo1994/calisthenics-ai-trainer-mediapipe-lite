@@ -6,6 +6,7 @@ from typing import Any
 import cv2
 import mediapipe as mp
 
+from domain.models import LandmarksGenerationResult
 from infrastructure.model_downloader import ensure_model_exists
 
 TOTAL_POSE_LANDMARKS = 33
@@ -155,49 +156,57 @@ def _process_video(
         json.dump(payload, json_file, indent=2)
 
 
-def generate_landmarks_for_movements(
-    movements_dir: Path,
-    model_path: Path,
-) -> tuple[list[str], list[str]]:
-    video_paths = _iter_movement_videos(movements_dir)
-    if not video_paths:
-        return [], [f"No video.mp4 files found under: {movements_dir}"]
+class MediaPipeMovementLandmarksGenerator:
+    def __init__(self, movements_dir: Path, model_path: Path) -> None:
+        self._movements_dir = movements_dir
+        self._model_path = model_path
 
-    ensure_model_exists(model_path=model_path)
+    def generate(self) -> LandmarksGenerationResult:
+        video_paths = _iter_movement_videos(self._movements_dir)
+        if not video_paths:
+            return LandmarksGenerationResult(
+                generated_movements=[],
+                errors=[f"No video.mp4 files found under: {self._movements_dir}"],
+            )
 
-    base_options = mp.tasks.BaseOptions
-    pose_landmarker = mp.tasks.vision.PoseLandmarker
-    pose_landmarker_options = mp.tasks.vision.PoseLandmarkerOptions
-    running_mode = mp.tasks.vision.RunningMode
+        ensure_model_exists(model_path=self._model_path)
 
-    options = pose_landmarker_options(
-        base_options=base_options(model_asset_path=str(model_path)),
-        running_mode=running_mode.VIDEO,
-        num_poses=1,
-        min_pose_detection_confidence=0.5,
-        min_pose_presence_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
+        base_options = mp.tasks.BaseOptions
+        pose_landmarker = mp.tasks.vision.PoseLandmarker
+        pose_landmarker_options = mp.tasks.vision.PoseLandmarkerOptions
+        running_mode = mp.tasks.vision.RunningMode
 
-    generated_movements: list[str] = []
-    errors: list[str] = []
+        options = pose_landmarker_options(
+            base_options=base_options(model_asset_path=str(self._model_path)),
+            running_mode=running_mode.VIDEO,
+            num_poses=1,
+            min_pose_detection_confidence=0.5,
+            min_pose_presence_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
 
-    for video_path in video_paths:
-        movement_dir = video_path.parent
-        movement_name = movement_dir.name
-        csv_path = movement_dir / "landmarks.csv"
-        json_path = movement_dir / "landmarks.json"
-        try:
-            # Create a fresh landmarker per video so timestamps can restart at 0.
-            with pose_landmarker.create_from_options(options) as landmarker:
-                _process_video(
-                    video_path=video_path,
-                    csv_path=csv_path,
-                    json_path=json_path,
-                    landmarker=landmarker,
-                )
-            generated_movements.append(movement_name)
-        except Exception as exc:
-            errors.append(f"{movement_name}: {exc}")
+        generated_movements: list[str] = []
+        errors: list[str] = []
 
-    return generated_movements, errors
+        for video_path in video_paths:
+            movement_dir = video_path.parent
+            movement_name = movement_dir.name
+            csv_path = movement_dir / "landmarks.csv"
+            json_path = movement_dir / "landmarks.json"
+            try:
+                # Create a fresh landmarker per video so timestamps can restart at 0.
+                with pose_landmarker.create_from_options(options) as landmarker:
+                    _process_video(
+                        video_path=video_path,
+                        csv_path=csv_path,
+                        json_path=json_path,
+                        landmarker=landmarker,
+                    )
+                generated_movements.append(movement_name)
+            except Exception as exc:
+                errors.append(f"{movement_name}: {exc}")
+
+        return LandmarksGenerationResult(
+            generated_movements=generated_movements,
+            errors=errors,
+        )
