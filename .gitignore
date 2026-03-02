@@ -85,6 +85,7 @@ Thumbs.db
 *.mkv
 *.gif
 !movements/**/*.mp4
+!movements-evaluation/**/*.mp4
 
 # ===============================
 
