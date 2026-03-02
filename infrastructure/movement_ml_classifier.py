@@ -33,6 +33,10 @@ class MovementKNNClassifier:
     def has_model(self) -> bool:
         return self._x_train.shape[0] > 0
 
+    @property
+    def labels(self) -> list[str]:
+        return list(self._labels)
+
     def add_observation(self, points: dict[int, tuple[float, float]]) -> None:
         vector = self._vectorize_points(points)
         if vector is None or not self.has_model:

@@ -3,11 +3,13 @@ from functools import lru_cache
 from pathlib import Path
 
 from application.use_cases.generate_movement_landmarks import GenerateMovementLandmarksUseCase
+from application.use_cases.evaluate_movement_model import EvaluateMovementModelUseCase
 from application.use_cases.process_telegram_video import ProcessTelegramVideoUseCase
 from application.use_cases.train_movement_template_model import TrainMovementTemplateModelUseCase
 from infrastructure.cloudflare_r2_storage import CloudflareR2StorageGateway
 from infrastructure.mediapipe_pose_processor import MediaPipePoseVideoProcessor
 from infrastructure.movement_landmarks_generator import MediaPipeMovementLandmarksGenerator
+from infrastructure.movement_model_evaluator import MovementModelMetricsEvaluator
 from infrastructure.movement_template_model_trainer import MovementTemplateModelTrainer
 from infrastructure.telegram_bot_gateway import TelegramBotGateway
 
@@ -20,6 +22,21 @@ def _resolve_movements_dir() -> Path:
     candidates.append(Path("movements"))
     # Fallback to repo-relative path in case process cwd is different.
     candidates.append(Path(__file__).resolve().parents[1] / "movements")
+
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_dir():
+            return candidate
+
+    return candidates[0]
+
+
+def _resolve_movements_evaluation_dir() -> Path:
+    env_path = os.getenv("MOVEMENTS_EVALUATION_DIR", "").strip()
+    candidates: list[Path] = []
+    if env_path:
+        candidates.append(Path(env_path))
+    candidates.append(Path("movements-evaluation"))
+    candidates.append(Path(__file__).resolve().parents[1] / "movements-evaluation")
 
     for candidate in candidates:
         if candidate.exists() and candidate.is_dir():
@@ -95,3 +112,22 @@ def get_train_movement_model_use_case() -> TrainMovementTemplateModelUseCase:
         default_k=movement_k,
     )
     return TrainMovementTemplateModelUseCase(trainer=trainer)
+
+
+@lru_cache(maxsize=1)
+def get_evaluate_movement_model_use_case() -> EvaluateMovementModelUseCase:
+    evaluation_dir = _resolve_movements_evaluation_dir()
+    movement_model_path = Path(os.getenv("MOVEMENT_MODEL_PATH", "models/movement_template_model.npz"))
+    pose_model_path = Path(os.getenv("MODEL_PATH", "pose_landmarker_lite.task"))
+    evaluator = MovementModelMetricsEvaluator(
+        evaluation_dir=evaluation_dir,
+        model_path=movement_model_path,
+    )
+    generator = MediaPipeMovementLandmarksGenerator(
+        movements_dir=evaluation_dir,
+        model_path=pose_model_path,
+    )
+    return EvaluateMovementModelUseCase(
+        evaluator=evaluator,
+        generator=generator,
+    )

@@ -3,6 +3,7 @@ from typing import Protocol
 
 from domain.models import (
     LandmarksGenerationResult,
+    MovementModelEvaluationResult,
     MovementModelTrainingResult,
     ProcessedVideo,
     StoredObject,
@@ -39,4 +40,9 @@ class MovementTemplateModelTrainer(Protocol):
         self,
         k: int | None = None,
     ) -> MovementModelTrainingResult:
+        ...
+
+
+class MovementModelEvaluator(Protocol):
+    def evaluate(self) -> MovementModelEvaluationResult:
         ...

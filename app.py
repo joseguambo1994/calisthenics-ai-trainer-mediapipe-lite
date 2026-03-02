@@ -4,6 +4,7 @@ import logging
 from pydantic import BaseModel, Field
 
 from api.dependencies import (
+    get_evaluate_movement_model_use_case,
     get_generate_landmarks_use_case,
     get_train_movement_model_use_case,
     get_use_case,
@@ -70,6 +71,68 @@ class TrainMovementModelSuccessResponse(BaseModel):
 
 
 class TrainMovementModelErrorResponse(BaseModel):
+    errors: list[str]
+
+
+class EvaluateMovementModelRequest(BaseModel):
+    regenerate_landmarks: bool = Field(
+        default=False,
+        description="Regenerate landmarks.csv in the evaluation dataset before scoring.",
+    )
+
+    model_config = {
+        "extra": "forbid",
+        "json_schema_extra": {
+            "examples": [
+                {"regenerate_landmarks": True},
+                {},
+            ]
+        }
+    }
+
+
+class MovementModelSkippedSampleResponse(BaseModel):
+    sample_path: str
+    true_label: str
+    reason: str
+
+
+class MovementModelEvaluationSampleResponse(BaseModel):
+    sample_path: str
+    true_label: str
+    predicted_label: str
+    similarity_percent: float
+    valid_rows: int
+
+
+class MovementClassMetricsResponse(BaseModel):
+    label: str
+    precision: float
+    recall: float
+    f1_score: float
+    support: int
+
+
+class EvaluateMovementModelSuccessResponse(BaseModel):
+    model_path: str
+    evaluation_dir: str
+    labels: list[str]
+    model_labels: list[str]
+    evaluated_samples: int
+    skipped_samples: list[MovementModelSkippedSampleResponse]
+    confusion_matrix: list[list[int]]
+    accuracy: float
+    macro_precision: float
+    macro_recall: float
+    macro_f1_score: float
+    weighted_precision: float
+    weighted_recall: float
+    weighted_f1_score: float
+    per_class_metrics: list[MovementClassMetricsResponse]
+    samples: list[MovementModelEvaluationSampleResponse]
+
+
+class EvaluateMovementModelErrorResponse(BaseModel):
     errors: list[str]
 
 
@@ -164,4 +227,79 @@ def train_movement_model(
         model_path=result.model_path,
         movements_trained=result.movements_trained,
         template_files=result.template_files,
+    )
+
+
+@app.post(
+    "/movement-model/evaluate",
+    response_model=EvaluateMovementModelSuccessResponse,
+    responses={
+        500: {
+            "model": EvaluateMovementModelErrorResponse,
+            "description": "Movement model evaluation failed.",
+        }
+    },
+)
+def evaluate_movement_model(
+    payload: EvaluateMovementModelRequest,
+) -> EvaluateMovementModelSuccessResponse | JSONResponse:
+    try:
+        use_case = get_evaluate_movement_model_use_case()
+        result = use_case.execute(
+            regenerate_landmarks=payload.regenerate_landmarks,
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content=EvaluateMovementModelErrorResponse(errors=[str(exc)]).model_dump(),
+        )
+
+    if result.errors:
+        return JSONResponse(
+            status_code=500,
+            content=EvaluateMovementModelErrorResponse(errors=result.errors).model_dump(),
+        )
+
+    return EvaluateMovementModelSuccessResponse(
+        model_path=result.model_path,
+        evaluation_dir=result.evaluation_dir,
+        labels=result.labels,
+        model_labels=result.model_labels,
+        evaluated_samples=result.evaluated_samples,
+        skipped_samples=[
+            MovementModelSkippedSampleResponse(
+                sample_path=sample.sample_path,
+                true_label=sample.true_label,
+                reason=sample.reason,
+            )
+            for sample in result.skipped_samples
+        ],
+        confusion_matrix=result.confusion_matrix,
+        accuracy=result.accuracy,
+        macro_precision=result.macro_precision,
+        macro_recall=result.macro_recall,
+        macro_f1_score=result.macro_f1_score,
+        weighted_precision=result.weighted_precision,
+        weighted_recall=result.weighted_recall,
+        weighted_f1_score=result.weighted_f1_score,
+        per_class_metrics=[
+            MovementClassMetricsResponse(
+                label=metric.label,
+                precision=metric.precision,
+                recall=metric.recall,
+                f1_score=metric.f1_score,
+                support=metric.support,
+            )
+            for metric in result.per_class_metrics
+        ],
+        samples=[
+            MovementModelEvaluationSampleResponse(
+                sample_path=sample.sample_path,
+                true_label=sample.true_label,
+                predicted_label=sample.predicted_label,
+                similarity_percent=sample.similarity_percent,
+                valid_rows=sample.valid_rows,
+            )
+            for sample in result.samples
+        ],
     )
