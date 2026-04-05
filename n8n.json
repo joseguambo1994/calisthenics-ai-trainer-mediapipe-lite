@@ -39,7 +39,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ion-prev-import-dip.trycloudflare.com/videos/process",
+        "url": "http://calisthenics-api:8000/videos/process",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -85,7 +85,7 @@
         "binaryPropertyName": "=data",
         "replyMarkup": "inlineKeyboard",
         "additionalFields": {
-          "caption": "={{\n  '✅ Video procesado\\n' +\n  'Movimiento detectado: ' + ($json.movement_name || 'desconocido') + '\\n\\n' +\n  'Feedback técnico:\\n' +\n  (($json.technique_feedback || []).map((t, i) => `• ${t}`).join('\\n') || '• (sin observaciones)')\n}}",
+          "caption": "={{\n  '✅ Video procesado\\n' +\n  '*Movimiento detectado:* *' + ($json.movement_name || 'desconocido') + '*\\n' +\n  '*Similitud técnica:* *' + \n  (($json.technique_similarity_percent !== undefined) \n      ? $json.technique_similarity_percent.toFixed(1) + '%' \n      : 'N/A') + '*\\n\\n' +\n  'Feedback técnico:\\n' +\n  (($json.technique_feedback || [])\n      .map(t => `• ${t}`)\n      .join('\\n') || '• (sin observaciones)')\n}}",
           "reply_to_message_id": 0
         }
       },
