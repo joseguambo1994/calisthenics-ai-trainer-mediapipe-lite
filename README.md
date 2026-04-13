@@ -73,6 +73,36 @@ Finalmente, definimos endpoints específicos para separar responsabilidades:
 
 El archivo `pose_landmarker_lite.task` es el modelo base proporcionado por Google que usamos para la pose estimation. El modelo que utilizamos para clasificar los movimientos se encuentra en `models/movement_template_model.npz`.
 
+## Estructura de Carpetas
+
+La carpeta `movements` sigue esta organización general. Cada movimiento contiene las vistas `back`, `diagonal` y `side`. Dentro de cada vista pueden existir archivos como `video.mp4`, `landmarks.csv` y `landmarks.json`, según el avance de procesamiento de ese ejemplo.
+
+```text
+movements/
+├── mapping.md
+├── double-swing-360/
+│   ├── back/
+│   │   ├── video.mp4
+│   │   ├── landmarks.csv
+│   │   └── landmarks.json
+│   ├── diagonal/
+│   │   ├── video.mp4
+│   │   ├── landmarks.csv
+│   │   └── landmarks.json
+│   └── side/
+│       ├── video.mp4
+│       ├── landmarks.csv
+│       └── landmarks.json
+├── dragon-360/
+├── geinger/
+├── handstand/
+├── olympic-muscle-up/
+├── pasavallas/
+├── strict-muscle-up/
+├── swing-360/
+└── torero/
+```
+
 ## Avance del Dataset (Movimiento x Ángulo)
 
 Leyenda de estado:
