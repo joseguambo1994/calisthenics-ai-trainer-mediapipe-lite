@@ -1,0 +1,40 @@
+009da35 | joseguambo1994 | 2026-04-12 | feat: Add dataset folder structure example.
+7452cf0 | joseguambo1994 | 2026-04-12 | fix: Wrong model name in documentation.
+bee0aad | joseguambo1994 | 2026-04-12 | feat: Add architectural decisions explanation.
+9e9369a | joseguambo1994 | 2026-04-12 | chore: Change node text from eng to spanish.
+a337442 | joseguambo1994 | 2026-04-05 | feat: Add consent step.
+f2c17a5 | joseguambo1994 | 2026-04-05 | feat: Add n8n flow to consume local python container instead of cloudflare.
+6c74eef | joseguambo1994 | 2026-03-01 | feat: Add model evaluation endpoint.
+5e6a5b2 | joseguambo1994 | 2026-03-01 | fix: Wrong video name excluding dragon diagonal video from training.
+98fa642 | joseguambo1994 | 2026-03-01 | feat: Add models evaluation landmarks files for dragon, geinger, olympic, swing, torero.
+5a737f3 | joseguambo1994 | 2026-03-01 | fix: Video present in evaluation and not in training dataset for double swing 360.
+edf6fe7 | joseguambo1994 | 2026-03-01 | feat: Add movements evaluation video dragon, torero, swing, double swing, geinger and olympic muscle up.
+6476009 | joseguambo1994 | 2026-03-01 | feat: Update dataset and evaluation dataset advancement.
+36480d7 | joseguambo1994 | 2026-02-17 | chore: Replace check and missing with icons..
+9022ec6 | joseguambo1994 | 2026-02-17 | chore: Add readme. Add dataset completion matrix.
+a450d27 | joseguambo1994 | 2026-02-17 | feat: Update model to detect dragon, geinger, handstand from back, side and diagonal..
+24cc70a | joseguambo1994 | 2026-02-17 | feat: Add landmarks for new movements.
+46e1734 | joseguambo1994 | 2026-02-17 | fix: remove root video from repository
+117f6d1 | joseguambo1994 | 2026-02-17 | fix: Track videos used for training.
+3095d51 | joseguambo1994 | 2026-02-17 | feat: Add movement name instead of deviation. Change font size and color inside video annotations.
+c3a3826 | joseguambo1994 | 2026-02-17 | fix: Remove unused folder making template and current comparison not being drawn.
+146c04a | joseguambo1994 | 2026-02-16 | feat: Add landmark baseline evaluator.
+588838a | joseguambo1994 | 2026-02-16 | feat: Add models generation.
+b3781eb | joseguambo1994 | 2026-02-16 | feat: Add support for camera angle in the local landmarks generation.
+75bb137 | joseguambo1994 | 2026-02-16 | feat: Refactor to follow clean architecture for landmarks generation endpoint.
+5d1eb32 | joseguambo1994 | 2026-02-16 | feat: Add landmarks generation.
+a7fd7a5 | joseguambo1994 | 2026-02-14 | Merge branch 'main' of https://github.com/joseguambo1994/calisthenics-ai-trainer-mediapipe-lite
+6a94e1a | joseguambo1994 | 2026-02-14 | feat: Add similarity percentage function.
+cd7d044 | joseguambo1994 | 2026-02-14 | feat: Add baseline movements.
+7f73c3b | joseguambo1994 | 2026-02-12 | chore: Remove unused notebook.
+ea75ed6 | joseguambo1994 | 2026-02-12 | feat: Add dockerhub workflow.
+8b87932 | joseguambo1994 | 2026-02-12 | feat: Add movement name. Add technique correction.
+ce5e562 | joseguambo1994 | 2026-02-12 | feat: Add n8n flow to repository.
+39f7335 | joseguambo1994 | 2026-02-12 | feat: Add technique feedback. Add movement name detection.
+6e56c4f | joseguambo1994 | 2026-02-11 | feat: Add working dockerfile.
+fee5ad1 | joseguambo1994 | 2026-02-11 | fix: Remove videos stored in server.
+e10dc85 | joseguambo1994 | 2026-02-11 | feat: Remove unused fields in response.
+c02b412 | joseguambo1994 | 2026-02-11 | feat: Add video signed url.
+15b6653 | joseguambo1994 | 2026-02-11 | feat: Add Clean architecture. Add api to receive file_id and download from telegram.
+6964573 | joseguambo1994 | 2026-02-11 | feat: Fix python code. Add cache ignore.
+839dfac | joseguambo1994 | 2026-02-11 | feat: Add initial template.
