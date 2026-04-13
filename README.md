@@ -4,14 +4,19 @@ Este repositorio contiene la implementación actual y el avance del dataset para
 
 Autores: **José Guambo** y **Aaron Echeverría**
 
-## Repositorios
-
-- Repositorio de código fuente: [GitHub - calisthenics-ai-trainer-mediapipe-lite](https://github.com/joseguambo1994/calisthenics-ai-trainer-mediapipe-lite)
-- Repositorio de imágenes: [Docker Hub - joseguambo1994/calisthenics-api](https://hub.docker.com/repository/docker/joseguambo1994/calisthenics-api/settings)
-
 ## Ejecución del Flujo
 
-![Flujo de ejecución](docs/executions/Flujo.gif)
+### Versión 1
+
+La siguiente ejecución corresponde al desarrollo local inicial, donde validamos la factibilidad del procesamiento y análisis de videos directamente en entorno local.
+
+![Flujo de ejecución versión 1](docs/executions/execution-v1.gif)
+
+### Versión actual en producción
+
+La siguiente ejecución corresponde al flujo actual en producción, con la integración completa entre Telegram, n8n, Supabase y el analizador desplegado en el VPS.
+
+![Flujo de ejecución versión actual](docs/executions/execution-v5.gif)
 
 ## Arquitectura
 
@@ -226,3 +231,8 @@ c02b412 | joseguambo1994 | 2026-02-11 | feat: Add video signed url.
 6964573 | joseguambo1994 | 2026-02-11 | feat: Fix python code. Add cache ignore.
 839dfac | joseguambo1994 | 2026-02-11 | feat: Add initial template.
 ```
+
+## Repositorios
+
+- Repositorio de código fuente: [GitHub - calisthenics-ai-trainer-mediapipe-lite](https://github.com/joseguambo1994/calisthenics-ai-trainer-mediapipe-lite)
+- Repositorio de imágenes: [Docker Hub - joseguambo1994/calisthenics-api](https://hub.docker.com/repository/docker/joseguambo1994/calisthenics-api/settings)
