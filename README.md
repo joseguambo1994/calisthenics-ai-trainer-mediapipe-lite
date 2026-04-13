@@ -69,9 +69,9 @@ Finalmente, definimos endpoints específicos para separar responsabilidades:
 
 - `video/process`: endpoint llamado por n8n para analizar videos.
 - `landmarks/generate`: endpoint interno para generar archivos CSV a partir de videos de ejemplo de ejecución perfecta del movimiento.
-- `movement-model/train`: endpoint que toma los CSV, entrena el clasificador y genera un nuevo archivo `pose_landmarker_lite.task`.
+- `movement-model/train`: endpoint que toma los CSV y entrena el clasificador de movimientos, cuyo artefacto se almacena en `models/movement_template_model.npz`.
 
-Ese archivo `pose_landmarker_lite.task` es el modelo entrenado que usamos para la clasificación final de movimientos.
+El archivo `pose_landmarker_lite.task` es el modelo base proporcionado por Google que usamos para la pose estimation. El modelo que utilizamos para clasificar los movimientos se encuentra en `models/movement_template_model.npz`.
 
 ## Avance del Dataset (Movimiento x Ángulo)
 
