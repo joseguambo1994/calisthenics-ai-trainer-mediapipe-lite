@@ -14,7 +14,7 @@
         16
       ],
       "id": "49963345-6174-4fc7-b5e2-cd2edfb8d10b",
-      "name": "Telegram Trigger",
+      "name": "Disparador Telegram",
       "webhookId": "92dcbedb-142d-416f-8207-6e864e9ce4bc",
       "credentials": {
         "telegramApi": {
@@ -25,7 +25,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const acceptancePhrases = new Set([\n  'i agree',\n  '/agree',\n  'agree',\n  'i accept',\n  '/accept',\n  'accept'\n]);\nconst declinePhrases = new Set([\n  'i do not agree',\n  '/decline',\n  'decline',\n  'i decline',\n  'reject',\n  '/reject'\n]);\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const msg = item.json.message ?? {};\n  const chatId = msg.chat?.id;\n  const userId = msg.from?.id;\n  const textSource = typeof msg.text === 'string'\n    ? msg.text\n    : (typeof msg.caption === 'string' ? msg.caption : '');\n  const text = textSource.trim();\n  const normalizedText = text.toLowerCase();\n  const fileIdRaw = msg.video?.file_id || msg.document?.file_id;\n  const fileId = typeof fileIdRaw === 'string' ? fileIdRaw.trim() : '';\n\n  out.push({\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      text,\n      normalized_text: normalizedText,\n      is_acceptance: acceptancePhrases.has(normalizedText),\n      is_decline: declinePhrases.has(normalizedText),\n      file_id: fileId\n    }\n  });\n}\n\nreturn out;"
+        "jsCode": "const acceptancePhrases = new Set([\n  'acepto',\n  '/acepto',\n  'si acepto',\n  's\\u00ed acepto',\n  'estoy de acuerdo',\n  'i agree',\n  '/agree',\n  'agree',\n  'i accept',\n  '/accept',\n  'accept'\n]);\nconst declinePhrases = new Set([\n  'no acepto',\n  '/no_acepto',\n  'rechazo',\n  'no estoy de acuerdo',\n  'i do not agree',\n  '/decline',\n  'decline',\n  'i decline',\n  'reject',\n  '/reject'\n]);\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const msg = item.json.message ?? {};\n  const chatId = msg.chat?.id;\n  const userId = msg.from?.id;\n  const textSource = typeof msg.text === 'string'\n    ? msg.text\n    : (typeof msg.caption === 'string' ? msg.caption : '');\n  const text = textSource.trim();\n  const normalizedText = text.toLowerCase();\n  const fileIdRaw = msg.video?.file_id || msg.document?.file_id;\n  const fileId = typeof fileIdRaw === 'string' ? fileIdRaw.trim() : '';\n\n  out.push({\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      text,\n      normalized_text: normalizedText,\n      is_acceptance: acceptancePhrases.has(normalizedText),\n      is_decline: declinePhrases.has(normalizedText),\n      file_id: fileId\n    }\n  });\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -34,7 +34,7 @@
         16
       ],
       "id": "1cdb34ae-a530-4ba6-b59e-d2d941628495",
-      "name": "Parse Telegram Message"
+      "name": "Interpretar mensaje de Telegram"
     },
     {
       "parameters": {
@@ -57,7 +57,7 @@
         16
       ],
       "id": "e66d1f81-9057-4700-89da-2555f73ab6cb",
-      "name": "Load Consent Record",
+      "name": "Cargar consentimiento",
       "alwaysOutputData": true,
       "credentials": {
         "supabaseApi": {
@@ -68,7 +68,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const originalItem = $items('Parse Telegram Message', 0, $itemIndex)?.[0]?.json ?? {};\nconst consentRecord = $json ?? {};\n\nconst chatId = originalItem.chat_id;\nconst userId = originalItem.user_id;\nconst currentFileId = originalItem.file_id;\nconst isAcceptance = originalItem.is_acceptance === true;\nconst isDecline = originalItem.is_decline === true;\n\nconst recordExists = consentRecord.telegram_user_id !== undefined && consentRecord.telegram_user_id !== null;\nconst consentStatus = typeof consentRecord.consent_status === 'string' ? consentRecord.consent_status : 'missing';\nconst pendingFileId = typeof consentRecord.pending_file_id === 'string' ? consentRecord.pending_file_id.trim() : '';\nconst pendingChatId = consentRecord.pending_chat_id ?? chatId;\n\nif (!chatId || userId === undefined || userId === null) {\n  return [{\n    json: {\n      chat_id: chatId,\n      should_process: false,\n      persist_mode: 'none',\n      response_text: 'I could not verify your Telegram user ID, so I cannot continue.'\n    }\n  }];\n}\n\nif (consentStatus === 'accepted') {\n  if (currentFileId) {\n    return [{\n      json: {\n        chat_id: chatId,\n        user_id: userId,\n        file_id: currentFileId,\n        should_process: true,\n        persist_mode: 'none'\n      }\n    }];\n  }\n\n  if (isAcceptance) {\n    return [{\n      json: {\n        chat_id: chatId,\n        user_id: userId,\n        should_process: false,\n        persist_mode: 'none',\n        response_text: 'Your consent is already active for this Telegram account. Send your video when you are ready.'\n      }\n    }];\n  }\n\n  return [{\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      should_process: false,\n      persist_mode: 'none',\n      response_text: 'Your consent is active. Send a video to continue with the analysis.'\n    }\n  }];\n}\n\nif (isAcceptance) {\n  const fileToProcess = currentFileId || pendingFileId;\n  const processingChatId = currentFileId ? chatId : pendingChatId;\n\n  return [{\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      file_id: fileToProcess,\n      process_chat_id: processingChatId,\n      should_process: Boolean(fileToProcess),\n      persist_mode: recordExists ? 'update' : 'create',\n      consent_status: 'accepted',\n      pending_file_id: null,\n      pending_chat_id: null,\n      response_text: fileToProcess\n        ? 'Consent registered. Processing your pending video now.'\n        : 'Consent registered for your Telegram account. You can now send your video for analysis.'\n    }\n  }];\n}\n\nif (isDecline) {\n  return [{\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      should_process: false,\n      persist_mode: recordExists ? 'update' : 'create',\n      consent_status: 'declined',\n      pending_file_id: null,\n      pending_chat_id: null,\n      response_text: 'Sadly, consentment is requiered to use our application. Hope we can serve in the future.'\n    }\n  }];\n}\n\nif (consentStatus === 'declined') {\n  return [{\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      should_process: false,\n      persist_mode: 'none'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    user_id: userId,\n    should_process: false,\n    persist_mode: recordExists ? 'update' : 'create',\n    consent_status: 'pending',\n    pending_file_id: currentFileId || pendingFileId || null,\n    pending_chat_id: currentFileId ? chatId : (pendingFileId ? pendingChatId : null),\n    response_text: 'Before I can continue, you must accept our agreement to collect and process the videos you send for movement analysis. Reply exactly with I AGREE to accept or I DO NOT AGREE to decline.'\n  }\n}];"
+        "jsCode": "const originalItem = $items('Interpretar mensaje de Telegram', 0, $itemIndex)?.[0]?.json ?? {};\nconst consentRecord = $json ?? {};\n\nconst chatId = originalItem.chat_id;\nconst userId = originalItem.user_id;\nconst currentFileId = originalItem.file_id;\nconst isAcceptance = originalItem.is_acceptance === true;\nconst isDecline = originalItem.is_decline === true;\n\nconst recordExists = consentRecord.telegram_user_id !== undefined && consentRecord.telegram_user_id !== null;\nconst consentStatus = typeof consentRecord.consent_status === 'string' ? consentRecord.consent_status : 'missing';\nconst pendingFileId = typeof consentRecord.pending_file_id === 'string' ? consentRecord.pending_file_id.trim() : '';\nconst pendingChatId = consentRecord.pending_chat_id ?? chatId;\n\nif (!chatId || userId === undefined || userId === null) {\n  return [{\n    json: {\n      chat_id: chatId,\n      should_process: false,\n      persist_mode: 'none',\n      response_text: 'No pude verificar tu ID de Telegram, as\\u00ed que no puedo continuar.'\n    }\n  }];\n}\n\nif (consentStatus === 'accepted') {\n  if (currentFileId) {\n    return [{\n      json: {\n        chat_id: chatId,\n        user_id: userId,\n        file_id: currentFileId,\n        should_process: true,\n        persist_mode: 'none'\n      }\n    }];\n  }\n\n  if (isAcceptance) {\n    return [{\n      json: {\n        chat_id: chatId,\n        user_id: userId,\n        should_process: false,\n        persist_mode: 'none',\n        response_text: 'Tu autorizaci\\u00f3n para el uso y tratamiento de datos personales ya se encuentra vigente para esta cuenta de Telegram. Puedes enviar tu video cuando lo desees.'\n      }\n    }];\n  }\n\n  return [{\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      should_process: false,\n      persist_mode: 'none',\n      response_text: 'Tu autorizaci\\u00f3n para el tratamiento de datos personales se encuentra vigente. Env\\u00eda un video para continuar con el servicio.'\n    }\n  }];\n}\n\nif (isAcceptance) {\n  const fileToProcess = currentFileId || pendingFileId;\n  const processingChatId = currentFileId ? chatId : pendingChatId;\n\n  return [{\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      file_id: fileToProcess,\n      process_chat_id: processingChatId,\n      should_process: Boolean(fileToProcess),\n      persist_mode: recordExists ? 'update' : 'create',\n      consent_status: 'accepted',\n      pending_file_id: null,\n      pending_chat_id: null,\n      response_text: fileToProcess\n        ? 'Tu autorizaci\\u00f3n para el uso y tratamiento de datos personales ha sido registrada. Procederemos con el tratamiento del video pendiente conforme a las finalidades informadas.'\n        : 'Tu autorizaci\\u00f3n para el uso y tratamiento de datos personales ha sido registrada correctamente. Ahora puedes enviar tu video para continuar con el servicio.'\n    }\n  }];\n}\n\nif (isDecline) {\n  return [{\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      should_process: false,\n      persist_mode: recordExists ? 'update' : 'create',\n      consent_status: 'declined',\n      pending_file_id: null,\n      pending_chat_id: null,\n      response_text: 'Lamentablemente, el consentimiento es obligatorio para usar nuestra aplicaci\\u00f3n. Esperamos poder ayudarte en el futuro.'\n    }\n  }];\n}\n\nif (consentStatus === 'declined') {\n  return [{\n    json: {\n      chat_id: chatId,\n      user_id: userId,\n      should_process: false,\n      persist_mode: 'none'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    user_id: userId,\n    should_process: false,\n    persist_mode: recordExists ? 'update' : 'create',\n    consent_status: 'pending',\n    pending_file_id: currentFileId || pendingFileId || null,\n    pending_chat_id: currentFileId ? chatId : (pendingFileId ? pendingChatId : null),\n    response_text: 'Para continuar, debes otorgar tu consentimiento libre, espec\\u00edfico, informado e inequ\\u00edvoco para el uso y tratamiento de tus datos personales y de los videos, im\\u00e1genes, metadatos e informaci\\u00f3n asociada que nos proporciones, para finalidades relacionadas con la prestaci\\u00f3n del servicio, incluyendo su recolecci\\u00f3n, registro, organizaci\\u00f3n, conservaci\\u00f3n, almacenamiento, consulta, uso, an\\u00e1lisis, procesamiento, circulaci\\u00f3n interna, transmisi\\u00f3n y las dem\\u00e1s operaciones estrictamente necesarias para la gesti\\u00f3n del servicio y el cumplimiento de obligaciones legales aplicables. Asimismo, declaras haber sido informado de que puedes ejercer tus derechos de acceso, rectificaci\\u00f3n, actualizaci\\u00f3n, oposici\\u00f3n, eliminaci\\u00f3n y revocatoria del consentimiento conforme a la normativa vigente en Ecuador. Responde exactamente con ACEPTO para autorizar o NO ACEPTO para rechazar.'\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -77,7 +77,7 @@
         16
       ],
       "id": "3975ea61-c2c7-42b6-862d-e6df5775bd81",
-      "name": "Evaluate Consent and Input"
+      "name": "Evaluar consentimiento y entrada"
     },
     {
       "parameters": {
@@ -90,7 +90,7 @@
         -208
       ],
       "id": "4f40f52b-6055-4182-845a-c8ce7d8f2ed5",
-      "name": "Build Consent Creates"
+      "name": "Preparar altas de consentimiento"
     },
     {
       "parameters": {
@@ -139,7 +139,7 @@
         -208
       ],
       "id": "a88f83e6-b312-499b-a6a7-a831f0194ae3",
-      "name": "Create Consent Record",
+      "name": "Crear registro de consentimiento",
       "credentials": {
         "supabaseApi": {
           "id": "",
@@ -158,7 +158,7 @@
         16
       ],
       "id": "bf0d6d8c-fb9d-4505-bfc1-0d6437c84cce",
-      "name": "Build Consent Updates"
+      "name": "Preparar actualizaciones de consentimiento"
     },
     {
       "parameters": {
@@ -213,7 +213,7 @@
         16
       ],
       "id": "498bb978-6fa3-4bd6-a368-34812af6c9cc",
-      "name": "Update Consent Record",
+      "name": "Actualizar registro de consentimiento",
       "credentials": {
         "supabaseApi": {
           "id": "",
@@ -232,7 +232,7 @@
         240
       ],
       "id": "e4e8ef31-f581-4b43-8c37-92fe6ed4d3de",
-      "name": "Build Consent Reply"
+      "name": "Preparar respuesta de consentimiento"
     },
     {
       "parameters": {
@@ -248,7 +248,7 @@
         240
       ],
       "id": "9ff32c3c-b9fd-4687-99ec-33426dd8d866",
-      "name": "Send Consent Reply",
+      "name": "Enviar respuesta de consentimiento",
       "webhookId": "8437cb1d-2d83-4451-afef-40601479cbab",
       "credentials": {
         "telegramApi": {
@@ -268,7 +268,7 @@
         464
       ],
       "id": "0d80e587-2192-4891-9cb9-0f831bd88999",
-      "name": "Keep Approved Videos"
+      "name": "Conservar videos aprobados"
     },
     {
       "parameters": {
@@ -295,7 +295,7 @@
         464
       ],
       "id": "2c1560a5-3a8f-4b9e-a80d-d89dfd599c0b",
-      "name": "Analyze (Cloudflare Tunnel)"
+      "name": "Analizar video (contenedor Python)"
     },
     {
       "parameters": {
@@ -309,17 +309,17 @@
         464
       ],
       "id": "3faebbf2-310a-4e57-ba57-d09eb5ba3bb5",
-      "name": "Download Video (R2 Signed URL)"
+      "name": "Descargar video (URL firmada R2)"
     },
     {
       "parameters": {
         "operation": "sendVideo",
-        "chatId": "={{$node[\"Keep Approved Videos\"].json.chat_id}}",
+        "chatId": "={{$node[\"Conservar videos aprobados\"].json.chat_id}}",
         "binaryData": true,
         "binaryPropertyName": "=data",
         "replyMarkup": "inlineKeyboard",
         "additionalFields": {
-          "caption": "={{\n  'âœ… Video procesado\\n' +\n  '*Movimiento detectado:* *' + ($json.movement_name || 'desconocido') + '*\\n' +\n  '*Similitud tÃ©cnica:* *' + \n  (($json.technique_similarity_percent !== undefined) \n      ? $json.technique_similarity_percent.toFixed(1) + '%' \n      : 'N/A') + '*\\n\\n' +\n  'Feedback tÃ©cnico:\\n' +\n  (($json.technique_feedback || [])\n      .map(t => `â€¢ ${t}`)\n      .join('\\n') || 'â€¢ (sin observaciones)')\n}}",
+          "caption": "={{\n  '\\u2705 Video procesado\\n' +\n  '*Movimiento detectado:* *' + ($json.movement_name || 'desconocido') + '*\\n' +\n  '*Similitud t\\u00e9cnica:* *' + \n  (($json.technique_similarity_percent !== undefined) \n      ? $json.technique_similarity_percent.toFixed(1) + '%' \n      : 'N/A') + '*\\n\\n' +\n  'Feedback t\\u00e9cnico:\\n' +\n  (($json.technique_feedback || [])\n      .map(t => `\\u2022 ${t}`)\n      .join('\\n') || '\\u2022 (sin observaciones)')\n}}",
           "reply_to_message_id": 0
         }
       },
@@ -330,7 +330,7 @@
         464
       ],
       "id": "fba6a7b6-5d2e-48f1-acf9-1b06e192c9bf",
-      "name": "Send Video to Telegram User",
+      "name": "Enviar video al usuario de Telegram",
       "webhookId": "02f4a1a7-ff7f-44ab-9796-0634dc1ca743",
       "credentials": {
         "telegramApi": {
@@ -341,125 +341,125 @@
     }
   ],
   "connections": {
-    "Telegram Trigger": {
+    "Disparador Telegram": {
       "main": [
         [
           {
-            "node": "Parse Telegram Message",
+            "node": "Interpretar mensaje de Telegram",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Telegram Message": {
+    "Interpretar mensaje de Telegram": {
       "main": [
         [
           {
-            "node": "Load Consent Record",
+            "node": "Cargar consentimiento",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Load Consent Record": {
+    "Cargar consentimiento": {
       "main": [
         [
           {
-            "node": "Evaluate Consent and Input",
+            "node": "Evaluar consentimiento y entrada",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Evaluate Consent and Input": {
+    "Evaluar consentimiento y entrada": {
       "main": [
         [
           {
-            "node": "Build Consent Creates",
+            "node": "Preparar altas de consentimiento",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Build Consent Updates",
+            "node": "Preparar actualizaciones de consentimiento",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Build Consent Reply",
+            "node": "Preparar respuesta de consentimiento",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Keep Approved Videos",
+            "node": "Conservar videos aprobados",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Consent Creates": {
+    "Preparar altas de consentimiento": {
       "main": [
         [
           {
-            "node": "Create Consent Record",
+            "node": "Crear registro de consentimiento",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Consent Updates": {
+    "Preparar actualizaciones de consentimiento": {
       "main": [
         [
           {
-            "node": "Update Consent Record",
+            "node": "Actualizar registro de consentimiento",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Consent Reply": {
+    "Preparar respuesta de consentimiento": {
       "main": [
         [
           {
-            "node": "Send Consent Reply",
+            "node": "Enviar respuesta de consentimiento",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Keep Approved Videos": {
+    "Conservar videos aprobados": {
       "main": [
         [
           {
-            "node": "Analyze (Cloudflare Tunnel)",
+            "node": "Analizar video (contenedor Python)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Analyze (Cloudflare Tunnel)": {
+    "Analizar video (contenedor Python)": {
       "main": [
         [
           {
-            "node": "Download Video (R2 Signed URL)",
+            "node": "Descargar video (URL firmada R2)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Download Video (R2 Signed URL)": {
+    "Descargar video (URL firmada R2)": {
       "main": [
         [
           {
-            "node": "Send Video to Telegram User",
+            "node": "Enviar video al usuario de Telegram",
             "type": "main",
             "index": 0
           }
